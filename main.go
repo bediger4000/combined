@@ -232,10 +232,14 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 			// regular expression match desired
 			fieldIndex, ok := fieldToIndex[fields[0]]
 			if ok {
+				r, err := regexp.Compile(fields[1])
+				if err != nil {
+					return nil, fmt.Errorf("regular expression to match field %q problem: %v", fields[0], fields[1])
+				}
 				return &matchSpec{
 					matchField:  fields[0],
 					fieldIndex:  fieldIndex,
-					matchRegexp: nil,
+					matchRegexp: r,
 				}, nil
 			}
 			return nil, fmt.Errorf("unknown input field for regex match %q", fields[0])
@@ -247,11 +251,15 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 // lineMatches decides whether a given line of input (broken
 // into field as a *parsedEntry) matches the desired criteria.
 func lineMatches(ms *matchSpec, pe *parsedEntry) bool {
-	if ms == nil {
+	switch {
+	case ms == nil:
 		return true
-	}
-	if ms.exactValue == pe.fields[ms.fieldIndex] {
-		return true
+	case ms.exactValue != "":
+		if ms.exactValue == pe.fields[ms.fieldIndex] {
+			return true
+		}
+	case ms.matchRegexp != nil:
+		return ms.matchRegexp.MatchString(pe.fields[ms.fieldIndex])
 	}
 	return false
 }
