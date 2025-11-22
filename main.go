@@ -14,7 +14,7 @@ import (
 
 func main() {
 
-	matching, outputFields, badLinesFileName, err := examineArguments()
+	matching, outputFields, wholeLineOut, badLinesFileName, err := examineArguments()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "argument error: %v\n", err)
 		return
@@ -27,7 +27,7 @@ func main() {
 	defer closefn()
 	defer closeferr()
 
-	if err := scanAllines(fin, ferr, matching, outputFields); err != nil {
+	if err := scanAllines(fin, ferr, matching, outputFields, wholeLineOut); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 	}
 }
@@ -35,7 +35,7 @@ func main() {
 // scanAllines calls a function (argument fn) on all lines
 // of linesIn argument one at a time. Can print some error messages
 // on os.Stderr.
-func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, outputFields []int) error {
+func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, outputFields []int, wholeLineOut bool) error {
 
 	scanner := bufio.NewScanner(linesIn)
 	/* For longer lines:
@@ -55,6 +55,10 @@ func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, out
 		} else if pe != nil {
 			// pe points to a filled-in parsedEntry struct
 			if lineMatches(matching, pe) {
+				if wholeLineOut {
+					fmt.Printf("%s\n", line)
+					continue
+				}
 				performOutput(outputFields, pe)
 			}
 		}
@@ -195,19 +199,20 @@ type matchSpec struct {
 	matchRegexp *regexp.Regexp
 }
 
-func examineArguments() (*matchSpec, []int, string, error) {
+func examineArguments() (*matchSpec, []int, bool, string, error) {
 	badLineFileName := flag.String("b", "", "unparseable lines file name")
 	outputFields := flag.String("f", "", "output field(s), comma separated")
 	matchExpression := flag.String("m", "", "match expression, field=value or field~regexp")
+	wholeLineOutput := flag.Bool("L", false, "output log file line on match, otherwise fields")
 
 	flag.Parse()
 
 	me, err := createMatching(*matchExpression)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, false, "", err
 	}
 
-	return me, createOutputIndexes(*outputFields), *badLineFileName, nil
+	return me, createOutputIndexes(*outputFields), *wholeLineOutput, *badLineFileName, nil
 }
 
 // createMatching fills in a *matchSpec struct based on
