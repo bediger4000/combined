@@ -10,11 +10,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 func main() {
 
-	matching, outputFields, wholeLineOut, badLinesFileName, err := examineArguments()
+	matching, outputFields, wholeLineOut, rfc3339Timestamps, badLinesFileName, err := examineArguments()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "argument error: %v\n", err)
 		return
@@ -27,7 +28,7 @@ func main() {
 	defer closefn()
 	defer closeferr()
 
-	if err := scanAllines(fin, ferr, matching, outputFields, wholeLineOut); err != nil {
+	if err := scanAllines(fin, ferr, matching, outputFields, wholeLineOut, rfc3339Timestamps); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 	}
 }
@@ -35,7 +36,7 @@ func main() {
 // scanAllines calls a function (argument fn) on all lines
 // of linesIn argument one at a time. Can print some error messages
 // on os.Stderr.
-func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, outputFields []int, wholeLineOut bool) error {
+func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, outputFields []int, wholeLineOut, rfc3339Timestamps bool) error {
 
 	scanner := bufio.NewScanner(linesIn)
 	/* For longer lines:
@@ -59,7 +60,7 @@ func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, out
 					fmt.Printf("%s\n", line)
 					continue
 				}
-				performOutput(outputFields, pe)
+				performOutput(outputFields, pe, rfc3339Timestamps)
 			}
 		}
 	}
@@ -199,20 +200,21 @@ type matchSpec struct {
 	matchRegexp *regexp.Regexp
 }
 
-func examineArguments() (*matchSpec, []int, bool, string, error) {
+func examineArguments() (*matchSpec, []int, bool, bool, string, error) {
 	badLineFileName := flag.String("b", "", "unparseable lines file name")
 	outputFields := flag.String("f", "", "output field(s), comma separated")
 	matchExpression := flag.String("m", "", "match expression, field=value or field~regexp")
 	wholeLineOutput := flag.Bool("L", false, "output log file line on match, otherwise fields")
+	rfc3339Timestamps := flag.Bool("r", false, "output timestamps in RFC3339 format")
 
 	flag.Parse()
 
 	me, err := createMatching(*matchExpression)
 	if err != nil {
-		return nil, nil, false, "", err
+		return nil, nil, false, false, "", err
 	}
 
-	return me, createOutputIndexes(*outputFields), *wholeLineOutput, *badLineFileName, nil
+	return me, createOutputIndexes(*outputFields), *wholeLineOutput, *rfc3339Timestamps, *badLineFileName, nil
 }
 
 // createMatching fills in a *matchSpec struct based on
@@ -276,9 +278,19 @@ func lineMatches(ms *matchSpec, pe *parsedEntry) bool {
 }
 
 // performOutput
-func performOutput(outputFields []int, pe *parsedEntry) {
+func performOutput(outputFields []int, pe *parsedEntry, rfc3339Timestamps bool) {
 	spacer := ""
 	for i := range outputFields {
+		if rfc3339Timestamps && outputFields[i] == 2 {
+			ts, err := time.Parse(`[02/Jan/2006:15:04:05 +0000]`, pe.fields[outputFields[i]])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "time parsing: %v\n", err)
+				continue
+			}
+			fmt.Printf("%s%s", spacer, ts.Format(time.RFC3339))
+			spacer = "\t"
+			continue
+		}
 		fmt.Printf("%s%s", spacer, pe.fields[outputFields[i]])
 		spacer = "\t"
 	}
@@ -310,7 +322,7 @@ func createOutputIndexes(outputFieldsCSV string) []int {
 			indexes = append(indexes, n)
 		} else {
 			// unknown field
-			fmt.Fprintf(os.Stderr, "unknown output field %q\n", fields[i])
+			fmt.Fprintf(os.Stderr, "ignoring unknown output field %q\n", fields[i])
 			continue
 		}
 	}
