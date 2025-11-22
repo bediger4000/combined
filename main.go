@@ -15,6 +15,10 @@ import (
 func main() {
 
 	matching, outputFields, badLinesFileName, err := examineArguments()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "argument error: %v\n", err)
+		return
+	}
 
 	fin, closefn, ferr, closeferr, err := openSomeFile(badLinesFileName)
 	if err != nil {
@@ -23,7 +27,9 @@ func main() {
 	defer closefn()
 	defer closeferr()
 
-	scanAllines(fin, ferr, matching, outputFields)
+	if err := scanAllines(fin, ferr, matching, outputFields); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
 }
 
 // scanAllines calls a function (argument fn) on all lines
@@ -43,7 +49,7 @@ func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, out
 		line := scanner.Text()
 		if pe, err := combinedLogLineParser(line); err != nil {
 			if linesError != nil {
-				fmt.Fprintf(linesError, "%s\n", line)
+				_, _ = fmt.Fprintf(linesError, "%s\n", line)
 			}
 			fmt.Fprintf(os.Stderr, "line %d: %v\n", lineCounter, err)
 		} else if pe != nil {
@@ -77,7 +83,7 @@ func openSomeFile(badLineFileName string) (*os.File, func(), *os.File, func(), e
 		if err != nil {
 			return nil, fn, nil, closeferr, err
 		}
-		closeferr = func() { ferr.Close() }
+		closeferr = func() { _ = ferr.Close() }
 	}
 
 	fin := os.Stdin
@@ -86,7 +92,7 @@ func openSomeFile(badLineFileName string) (*os.File, func(), *os.File, func(), e
 		if fin, err = os.Open(flag.Arg(0)); err != nil {
 			return nil, fn, nil, closeferr, err
 		}
-		fn = func() { fin.Close() }
+		fn = func() { _ = fin.Close() }
 	}
 	return fin, fn, ferr, closeferr, nil
 }
@@ -180,7 +186,6 @@ func combinedLogLineParser(textIn string) (*parsedEntry, error) {
 		}
 		return nil, errors.New("no matches")
 	}
-	return nil, nil
 }
 
 type matchSpec struct {
@@ -199,6 +204,7 @@ func examineArguments() (*matchSpec, []int, string, error) {
 
 	me, err := createMatching(*matchExpression)
 	if err != nil {
+		return nil, nil, "", err
 	}
 
 	return me, createOutputIndexes(*outputFields), *badLineFileName, nil
