@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"combined/parser"
+	"combined/tree"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,7 +17,7 @@ import (
 
 func main() {
 
-	matching, outputFields, wholeLineOut, rfc3339Timestamps, badLinesFileName, err := examineArguments()
+	matching, matchingProgram, outputFields, wholeLineOut, rfc3339Timestamps, badLinesFileName, err := examineArguments()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "argument error: %v\n", err)
 		return
@@ -28,15 +30,15 @@ func main() {
 	defer closefn()
 	defer closeferr()
 
-	if err := scanAllines(fin, ferr, matching, outputFields, wholeLineOut, rfc3339Timestamps); err != nil {
+	if err := scanAllines(fin, ferr, matching, matchingProgram, outputFields, wholeLineOut, rfc3339Timestamps); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 	}
 }
 
 // scanAllines calls a function (argument fn) on all lines
 // of linesIn argument one at a time. Can print some error messages
-// on os.Stderr.
-func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, outputFields []int, wholeLineOut, rfc3339Timestamps bool) error {
+// on os.Stderr. Control flow for line scanning.
+func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, matchProgram *matchSentence, outputFields []int, wholeLineOut, rfc3339Timestamps bool) error {
 
 	scanner := bufio.NewScanner(linesIn)
 	/* For longer lines:
@@ -55,13 +57,15 @@ func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, out
 			fmt.Fprintf(os.Stderr, "line %d: %v\n", lineCounter, err)
 		} else if pe != nil {
 			// pe points to a filled-in parsedEntry struct
-			if lineMatches(matching, pe) {
+			if lineMatches(matching, matchProgram, pe) {
 				if wholeLineOut {
 					fmt.Printf("%s\n", line)
 					continue
 				}
 				performOutput(outputFields, pe, rfc3339Timestamps)
 			}
+		} else {
+			fmt.Fprintf(os.Stderr, "line %d: no error, also no parsed line\n", lineCounter)
 		}
 	}
 
@@ -200,21 +204,38 @@ type matchSpec struct {
 	matchRegexp *regexp.Regexp
 }
 
-func examineArguments() (*matchSpec, []int, bool, bool, string, error) {
+type matchSentence struct {
+	something *tree.Node
+}
+
+func examineArguments() (*matchSpec, *matchSentence, []int, bool, bool, string, error) {
 	badLineFileName := flag.String("b", "", "unparseable lines file name")
 	outputFields := flag.String("f", "", "output field(s), comma separated")
 	matchExpression := flag.String("m", "", "match expression, field=value or field~regexp")
 	wholeLineOutput := flag.Bool("L", false, "output log file line on match, otherwise fields")
 	rfc3339Timestamps := flag.Bool("r", false, "output timestamps in RFC3339 format")
+	matchProgram := flag.String("E", "", "AND/OR/NOT boolean sentence for match")
 
 	flag.Parse()
+	var err error
 
-	me, err := createMatching(*matchExpression)
-	if err != nil {
-		return nil, nil, false, false, "", err
+	var me *matchSpec
+	if *matchExpression != "" {
+		me, err = createMatching(*matchExpression)
+		if err != nil {
+			return nil, nil, nil, false, false, "", err
+		}
 	}
 
-	return me, createOutputIndexes(*outputFields), *wholeLineOutput, *rfc3339Timestamps, *badLineFileName, nil
+	var ms *matchSentence
+	if *matchProgram != "" {
+		ms, err = createMatchProgram(*matchProgram)
+		if err != nil {
+			return nil, nil, nil, false, false, "", err
+		}
+	}
+
+	return me, ms, createOutputIndexes(*outputFields), *wholeLineOutput, *rfc3339Timestamps, *badLineFileName, nil
 }
 
 // createMatching fills in a *matchSpec struct based on
@@ -229,7 +250,7 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 	fields := strings.Split(matchExpression, "=")
 	if len(fields) == 2 {
 		// exact match desired
-		fieldIndex, ok := fieldToIndex[fields[0]]
+		fieldIndex, ok := parser.FieldToIndex[fields[0]]
 		if ok {
 			return &matchSpec{
 				matchField: fields[0],
@@ -243,7 +264,7 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 		fields = strings.Split(matchExpression, "~")
 		if len(fields) == 2 {
 			// regular expression match desired
-			fieldIndex, ok := fieldToIndex[fields[0]]
+			fieldIndex, ok := parser.FieldToIndex[fields[0]]
 			if ok {
 				r, err := regexp.Compile(fields[1])
 				if err != nil {
@@ -263,17 +284,29 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 
 // lineMatches decides whether a given line of input (broken
 // into field as a *parsedEntry) matches the desired criteria.
-func lineMatches(ms *matchSpec, pe *parsedEntry) bool {
-	switch {
-	case ms == nil:
+func lineMatches(ms *matchSpec, mp *matchSentence, pe *parsedEntry) bool {
+	if ms == nil && mp == nil {
 		return true
-	case ms.exactValue != "":
-		if ms.exactValue == pe.fields[ms.fieldIndex] {
-			return true
+	}
+	fmt.Printf("lineMatches(%p, %p, %p)\n", ms, mp, pe)
+	if ms != nil {
+		fmt.Printf("single match field index %d\n", ms.fieldIndex)
+		if ms.exactValue != "" {
+			fmt.Printf("match string: %s", ms.exactValue)
 		}
-	case ms.matchRegexp != nil:
+	}
+	if mp != nil {
+	}
+	switch {
+	case mp != nil:
+		return mp.Match(pe)
+	case ms != nil:
+		if ms.exactValue != "" {
+			return ms.exactValue == pe.fields[ms.fieldIndex]
+		}
 		return ms.matchRegexp.MatchString(pe.fields[ms.fieldIndex])
 	}
+	fmt.Printf("fall thru false\n")
 	return false
 }
 
@@ -297,28 +330,15 @@ func performOutput(outputFields []int, pe *parsedEntry, rfc3339Timestamps bool) 
 	fmt.Println()
 }
 
-var fieldToIndex = map[string]int{
-	"ipaddr":    0,
-	"garbage":   1,
-	"timestamp": 2,
-	"method":    3,
-	"url":       4,
-	"version":   5,
-	"code":      6,
-	"size":      7,
-	"referrer":  8,
-	"useragent": 9,
-}
-
 func createOutputIndexes(outputFieldsCSV string) []int {
 	if outputFieldsCSV == "" {
-		return []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		return parser.AllFieldsIndexes
 	}
 
 	var indexes []int
 	fields := strings.Split(outputFieldsCSV, ",")
 	for i := range fields {
-		if n, ok := fieldToIndex[fields[i]]; ok {
+		if n, ok := parser.FieldToIndex[fields[i]]; ok {
 			indexes = append(indexes, n)
 		} else {
 			// unknown field
