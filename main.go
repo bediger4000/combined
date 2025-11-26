@@ -214,7 +214,7 @@ func examineArguments() (*matchSpec, *matchSentence, []int, bool, bool, string, 
 	matchExpression := flag.String("m", "", "match expression, field=value or field~regexp")
 	wholeLineOutput := flag.Bool("L", false, "output log file line on match, otherwise fields")
 	rfc3339Timestamps := flag.Bool("r", false, "output timestamps in RFC3339 format")
-	matchProgram := flag.String("E", "", "AND/OR/NOT boolean sentence for match")
+	matchProgram := flag.String("e", "", "AND/OR/NOT boolean sentence for match")
 
 	flag.Parse()
 	var err error
@@ -252,10 +252,11 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 		// exact match desired
 		fieldIndex, ok := parser.FieldToIndex[fields[0]]
 		if ok {
+			pattern := strings.TrimRight(strings.TrimLeft(fields[1], "/"), "/")
 			return &matchSpec{
 				matchField: fields[0],
 				fieldIndex: fieldIndex,
-				exactValue: fields[1],
+				exactValue: pattern,
 			}, nil
 		}
 		// unknown field
@@ -266,7 +267,8 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 			// regular expression match desired
 			fieldIndex, ok := parser.FieldToIndex[fields[0]]
 			if ok {
-				r, err := regexp.Compile(fields[1])
+				pattern := strings.TrimRight(strings.TrimLeft(fields[1], "/"), "/")
+				r, err := regexp.Compile(pattern)
 				if err != nil {
 					return nil, fmt.Errorf("regular expression to match field %q problem: %v", fields[0], fields[1])
 				}
@@ -287,15 +289,6 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 func lineMatches(ms *matchSpec, mp *matchSentence, pe *parsedEntry) bool {
 	if ms == nil && mp == nil {
 		return true
-	}
-	fmt.Printf("lineMatches(%p, %p, %p)\n", ms, mp, pe)
-	if ms != nil {
-		fmt.Printf("single match field index %d\n", ms.fieldIndex)
-		if ms.exactValue != "" {
-			fmt.Printf("match string: %s", ms.exactValue)
-		}
-	}
-	if mp != nil {
 	}
 	switch {
 	case mp != nil:
