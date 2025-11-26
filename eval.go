@@ -27,9 +27,10 @@ func eval(node *tree.Node, pe *parsedEntry) bool {
 	case lexer.NOT:
 		return !eval(node.Left, pe)
 	case lexer.EXACT_MATCH:
-		return true
+		return node.ExactValue == pe.fields[node.FieldIndex]
 	case lexer.REGEX_MATCH:
-		return true
+		matched := node.Pattern.MatchString(pe.fields[node.FieldIndex])
+		return matched
 	default:
 		fmt.Fprintf(os.Stderr, "reached node with Type %s in error\n", node.Op)
 		return false
