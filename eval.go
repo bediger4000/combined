@@ -7,9 +7,15 @@ import (
 	"os"
 )
 
+// eval recursively traverses a tree of *tree.Node structs.
+// Recursion bottoms out in the EXACT_MATCH and REGEX_MATCH
+// cases, which create the true/false values that AND/OR/NOT
+// nodes act on. Since the tree comes from parser, it's unlikely
+// to have many, if any, errors, so just print them to stderr.
 func eval(node *tree.Node, pe *parsedEntry) bool {
 	if node == nil {
 		fmt.Fprintf(os.Stderr, "reached nil node in error\n")
+		return false
 	}
 	switch node.Op {
 	case lexer.OR:
