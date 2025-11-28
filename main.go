@@ -252,7 +252,7 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 		// exact match desired
 		fieldIndex, ok := parser.FieldToIndex[fields[0]]
 		if ok {
-			pattern := strings.TrimRight(strings.TrimLeft(fields[1], "/"), "/")
+			pattern := strings.TrimSuffix(strings.TrimPrefix(fields[1], "/"), "/")
 			return &matchSpec{
 				matchField: fields[0],
 				fieldIndex: fieldIndex,
@@ -267,7 +267,7 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 			// regular expression match desired
 			fieldIndex, ok := parser.FieldToIndex[fields[0]]
 			if ok {
-				pattern := strings.TrimRight(strings.TrimLeft(fields[1], "/"), "/")
+				pattern := strings.TrimPrefix(strings.TrimSuffix(fields[1], "/"), "/")
 				r, err := regexp.Compile(pattern)
 				if err != nil {
 					return nil, fmt.Errorf("regular expression to match field %q problem: %v", fields[0], fields[1])
