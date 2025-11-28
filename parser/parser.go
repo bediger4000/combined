@@ -3,6 +3,7 @@ package parser
 import (
 	"combined/lexer"
 	"combined/tree"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -34,91 +35,87 @@ type Parser struct {
 	lexer *lexer.Lexer
 }
 
-// Parse starts building a parse tree, and returns it
-func (p *Parser) Parse() *tree.Node {
+// Parse starts building a parse tree. Covers up the
+// use of an un-exported non-terminal function.
+func (p *Parser) Parse() (*tree.Node, error) {
 	return p.expr()
 }
 
-func (p *Parser) expr() *tree.Node {
-	node := p.term()
+func (p *Parser) expr() (*tree.Node, error) {
+	node, err := p.term()
 	for kind, lexeme := p.lexer.NextToken(); kind == lexer.OR; kind, lexeme = p.lexer.NextToken() {
 		tmp := tree.NewNode(kind, lexeme)
 		p.lexer.Consume()
 		tmp.Left = node
 		node = tmp
-		node.Right = p.term()
+		var e error
+		node.Right, e = p.term()
+		err = errors.Join(err, e)
 	}
-	return node
+	return node, err
 }
 
-func (p *Parser) term() *tree.Node {
-	node := p.factor()
+func (p *Parser) term() (*tree.Node, error) {
+	node, err := p.factor()
 	for kind, lexeme := p.lexer.NextToken(); kind == lexer.AND; kind, lexeme = p.lexer.NextToken() {
 		tmp := tree.NewNode(kind, lexeme)
 		p.lexer.Consume()
 		tmp.Left = node
 		node = tmp
-		node.Right = p.factor()
+		var e error
+		node.Right, e = p.factor()
+		err = errors.Join(err, e)
 	}
-	return node
+	return node, err
 }
 
-func (p *Parser) factor() *tree.Node {
+func (p *Parser) factor() (*tree.Node, error) {
 	kind, lexeme := p.lexer.NextToken()
 	switch kind {
 	case lexer.NOT:
 		unaryOp := lexeme
 		p.lexer.Consume()
-		factor := p.factor()
-		return tree.NotNode(unaryOp, factor)
+		factor, err := p.factor()
+		return tree.NotNode(unaryOp, factor), err
 	case lexer.FIELD:
 		return p.boolean()
 	case lexer.LPAREN:
 		p.lexer.Consume() // left paren
-		expr := p.expr()
+		expr, err := p.expr()
 		kind, lexeme = p.lexer.NextToken()
 		if kind != lexer.RPAREN {
-			fmt.Printf("Wanted an RPAREN, got %v: %q\n", kind, lexeme)
+			err = errors.Join(err, fmt.Errorf("wanted an RPAREN, got %v: %q\n", kind, lexeme))
 		}
 		p.lexer.Consume() // right paren
-		return expr
+		return expr, err
 	default:
-		fmt.Printf("Wanted a CONSTANT or LPAREN, got %v: %q\n", kind, lexeme)
+		return nil, fmt.Errorf("wanted NOT, FIELD or LPAREN, got %v: %q\n", kind, lexeme)
 	}
-	return nil
+	return nil, nil
 }
 
-func (p *Parser) boolean() *tree.Node {
+func (p *Parser) boolean() (*tree.Node, error) {
 	kind, lexeme := p.lexer.NextToken()
 	field := lexeme
 	p.lexer.Consume()
-	fmt.Printf("boolean, field %q\n", field)
 
 	kind, lexeme = p.lexer.NextToken()
 	if kind != lexer.MATCH_OP {
-		// what to do
-		fmt.Printf("Wanted a MATCH_OP, got %v: %q\n", kind, lexeme)
-		return nil
+		return nil, fmt.Errorf("wanted a MATCH_OP, got %v: %q\n", kind, lexeme)
 	}
 	p.lexer.Consume()
 	booleanNode := tree.NewNode(kind, lexeme)
-	fmt.Printf("boolean, MATCH_OP %q\n", lexeme)
 
 	kind, lexeme = p.lexer.NextToken()
 	if kind != lexer.PATTERN {
-		// what to do
-		fmt.Printf("Wanted a PATTERN, got %v: %q\n", kind, lexeme)
-		return nil
+		return nil, fmt.Errorf("wanted a PATTERN, got %v: %q\n", kind, lexeme)
 	}
-	pattern := strings.TrimRight(strings.TrimLeft(lexeme, "/"), "/")
+	pattern := strings.TrimSuffix(strings.TrimPrefix(lexeme, "/"), "/")
 	p.lexer.Consume()
-	fmt.Printf("boolean, PATTERN %q\n", pattern)
 
 	var ok bool
 	if booleanNode.FieldIndex, ok = FieldToIndex[field]; !ok {
-		// what to do
-		fmt.Printf("No field named %q available for matching\n", field)
-		return nil
+		return nil, fmt.Errorf("no field named %q available for matching\n", field)
 	}
 
 	if booleanNode.Op == lexer.EXACT_MATCH {
@@ -127,11 +124,11 @@ func (p *Parser) boolean() *tree.Node {
 		var err error
 		booleanNode.Pattern, err = regexp.Compile(pattern)
 		if err != nil {
-			// what to do
+			return nil, err
 		}
 	}
 
-	return booleanNode
+	return booleanNode, nil
 }
 
 // NewParser creates a filled in Parser struct and returns it.
