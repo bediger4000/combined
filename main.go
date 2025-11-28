@@ -38,7 +38,7 @@ func main() {
 // scanAllines calls a function (argument fn) on all lines
 // of linesIn argument one at a time. Can print some error messages
 // on os.Stderr. Control flow for line scanning.
-func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, matchProgram *matchSentence, outputFields []int, wholeLineOut, rfc3339Timestamps bool) error {
+func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, matchProgram *tree.Node, outputFields []int, wholeLineOut, rfc3339Timestamps bool) error {
 
 	scanner := bufio.NewScanner(linesIn)
 	/* For longer lines:
@@ -204,11 +204,7 @@ type matchSpec struct {
 	matchRegexp *regexp.Regexp
 }
 
-type matchSentence struct {
-	something *tree.Node
-}
-
-func examineArguments() (*matchSpec, *matchSentence, []int, bool, bool, string, error) {
+func examineArguments() (*matchSpec, *tree.Node, []int, bool, bool, string, error) {
 	badLineFileName := flag.String("b", "", "unparseable lines file name")
 	outputFields := flag.String("f", "", "output field(s), comma separated")
 	matchExpression := flag.String("m", "", "match expression, field=value or field~regexp")
@@ -227,7 +223,7 @@ func examineArguments() (*matchSpec, *matchSentence, []int, bool, bool, string, 
 		}
 	}
 
-	var ms *matchSentence
+	var ms *tree.Node
 	if *matchProgram != "" {
 		ms, err = createMatchProgram(*matchProgram)
 		if err != nil {
@@ -286,13 +282,13 @@ func createMatching(matchExpression string) (*matchSpec, error) {
 
 // lineMatches decides whether a given line of input (broken
 // into field as a *parsedEntry) matches the desired criteria.
-func lineMatches(ms *matchSpec, mp *matchSentence, pe *parsedEntry) bool {
+func lineMatches(ms *matchSpec, mp *tree.Node, pe *parsedEntry) bool {
 	if ms == nil && mp == nil {
 		return true
 	}
 	switch {
 	case mp != nil:
-		return mp.Match(pe)
+		return Match(mp, pe)
 	case ms != nil:
 		if ms.exactValue != "" {
 			return ms.exactValue == pe.fields[ms.fieldIndex]
