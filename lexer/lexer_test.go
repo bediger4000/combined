@@ -48,38 +48,89 @@ func TestTokenType_String(t *testing.T) {
 }
 
 func TestLexer_NextToken(t *testing.T) {
-	type fields struct {
-		input       []rune
-		start       int
-		pos         int
-		items       chan item
-		currentItem item
-		consumed    bool
-	}
 	tests := []struct {
-		name   string
-		fields fields
-		want   TokenType
-		want1  string
+		name        string
+		singleToken string
+		wantToken   TokenType
+		wantLexeme  string
 	}{
-		// TODO: Add test cases.
+		{
+			name:        "single left paren",
+			singleToken: "(",
+			wantToken:   LPAREN,
+			wantLexeme:  "(",
+		},
+		{
+			name:        "single right paren",
+			singleToken: ")",
+			wantToken:   RPAREN,
+			wantLexeme:  ")",
+		},
+		{
+			name:        "and token",
+			singleToken: "&&",
+			wantToken:   AND,
+			wantLexeme:  "&&",
+		},
+		{
+			name:        "or token",
+			singleToken: "||",
+			wantToken:   OR,
+			wantLexeme:  "||",
+		},
+		{
+			name:        "not token",
+			singleToken: "-",
+			wantToken:   NOT,
+			wantLexeme:  "-",
+		},
+		{
+			name:        "exact match token",
+			singleToken: "=",
+			wantToken:   MATCH_OP,
+			wantLexeme:  "=",
+		},
+		{
+			name:        "regexp match token",
+			singleToken: "~",
+			wantToken:   MATCH_OP,
+			wantLexeme:  "~",
+		},
+		{
+			name:        "field token",
+			singleToken: "timestamp",
+			wantToken:   FIELD,
+			wantLexeme:  "timestamp",
+		},
+		{
+			name:        "regexp pattern token",
+			singleToken: "/abcdefg/",
+			wantToken:   PATTERN,
+			wantLexeme:  "/abcdefg/",
+		},
+		{
+			name:        "regexp pattern token, metachars",
+			singleToken: "/a.b[cde]f\\//",
+			wantToken:   PATTERN,
+			wantLexeme:  "/a.b[cde]f\\//",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := &Lexer{
-				input:       tt.fields.input,
-				start:       tt.fields.start,
-				pos:         tt.fields.pos,
-				items:       tt.fields.items,
-				currentItem: tt.fields.currentItem,
-				consumed:    tt.fields.consumed,
+			l := Lex(tt.singleToken)
+			gotToken, gotLexeme := l.NextToken()
+			if gotToken != tt.wantToken {
+				t.Errorf("Lexer.NextToken() got = %v, want %v", gotToken, tt.wantToken)
 			}
-			got, got1 := l.NextToken()
-			if got != tt.want {
-				t.Errorf("Lexer.NextToken() got = %v, want %v", got, tt.want)
+			if gotLexeme != tt.wantLexeme {
+				t.Errorf("Lexer.NextToken() got lexeme = %v, want %v", gotLexeme, tt.wantLexeme)
 			}
-			if got1 != tt.want1 {
-				t.Errorf("Lexer.NextToken() got1 = %v, want %v", got1, tt.want1)
+			if l.consumed {
+				t.Errorf("Lexer consumed an item  without being asked")
+			}
+			l.Consume()
+			if !l.consumed {
+				t.Errorf("Lexer did not consume an item when asked")
 			}
 		})
 	}
