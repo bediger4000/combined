@@ -10,18 +10,18 @@ type TokenType int
 
 // EOF and others: all the types of tokens
 const (
-	EOF         TokenType = iota
-	PATTERN     TokenType = iota
-	FIELD       TokenType = iota
-	AND         TokenType = iota
-	OR          TokenType = iota
-	NOT         TokenType = iota
-	LPAREN      TokenType = iota
-	RPAREN      TokenType = iota
-	MATCH_OP    TokenType = iota
-	EXACT_MATCH TokenType = iota
-	REGEX_MATCH TokenType = iota
-	EOL         TokenType = iota
+	EOF TokenType = iota
+	PATTERN
+	FIELD
+	AND
+	OR
+	NOT
+	LPAREN
+	RPAREN
+	MATCH_OP
+	EXACT_MATCH
+	REGEX_MATCH
+	EOL
 )
 
 func (t TokenType) String() string {
