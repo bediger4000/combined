@@ -87,6 +87,15 @@ but the matching specifications can be connected with `&&` for "logical AND",
 `||` for "logical OR", `-` for NOT, and parenthesized for clarity.
 NOT binds tightest, followed by AND, followed by OR.
 
+Here's the grammar for reference:
+
+    expr     ->rarr; term { OR term }
+    term     ->rarr; factor { AND factor }
+    factor   ->rarr; '(' expr ')' | NOT factor | boolean
+    boolean  ->rarr; FIELD match-op PATTERN
+    match-op ->rarr; '='|'~'
+
+
 #### Field names
 
 The field names get used both in match expressions,
