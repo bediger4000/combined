@@ -89,11 +89,11 @@ NOT binds tightest, followed by AND, followed by OR.
 
 Here's the grammar for reference:
 
-    expr     &rarr; term { OR term }
-    term     &rarr; factor { AND factor }
-    factor   &rarr; '(' expr ')' | NOT factor | boolean
-    boolean  &rarr; FIELD match-op PATTERN
-    match-op &rarr; '='|'~'
+expr     &rarr; term { OR term }<br/>
+term     &rarr; factor { AND factor }<br/>
+factor   &rarr; '(' expr ')' | NOT factor | boolean<br/>
+boolean  &rarr; FIELD match-op PATTERN<br/>
+match-op &rarr; '='|'~'<br/>
 
 
 #### Field names
