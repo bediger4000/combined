@@ -89,6 +89,8 @@ NOT binds tightest, followed by AND, followed by OR.
 
 #### Field names
 
+The field names get used both in match expressions,
+and with the `-f` flag to specify which field to print on the occasion of a match.
 
 |:--------|
 |ipaddr|
