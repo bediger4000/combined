@@ -89,6 +89,7 @@ NOT binds tightest, followed by AND, followed by OR.
 
 #### Field names
 
+
 |---------|
 | ipaddr |
 | garbage |
@@ -100,6 +101,7 @@ NOT binds tightest, followed by AND, followed by OR.
 | size |
 | referrer |
 | useragent |
+
 
 The `url` field could arguably be called `path`, and I didn't misspell `referrer`.
 
