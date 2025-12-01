@@ -92,17 +92,18 @@ NOT binds tightest, followed by AND, followed by OR.
 The field names get used both in match expressions,
 and with the `-f` flag to specify which field to print on the occasion of a match.
 
+|         |
 |:--------|
-|ipaddr|
-|garbage|
-|timestamp|
-|method|
-|url|
-|version|
-|code|
-|size|
-|referrer|
-|useragent|
+|ipaddr
+|garbage
+|timestamp
+|method
+|url
+|version
+|code
+|size
+|referrer
+|useragent
 
 
 The `url` field could arguably be called `path`, and I didn't misspell `referrer`.
