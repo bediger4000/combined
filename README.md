@@ -132,3 +132,51 @@ $ combined -e 'url~/\/posts\/..*/ && referrer~/bruceediger.com\/tags\//' \
     -f url,referrer  slashdot.sorted.human.log 
 ```
 
+## Design
+
+The program does this:
+
+1. Evaluate command line arguments.
+  - Includes parsing any logical expressions set with `-e` flag.
+2. Read in a line of text.
+3. See if it matches the regular expression for a "combined" format line.
+   - Break the line into the logical fields of a "combined" format record
+4. If there's a simple exact match or regex match set,
+see if the fields match.
+5. If there's a logical expression set,
+evaluate the expression with the fields.
+6. If step (4) or (5) indicate, output the fields specified.
+7. Repeat steps 2-6 until no lines are left.
+
+I used the `flag` Go standard package to read the command line.
+This lets me use a file name on the command line for input,
+or if that's lacking, read log file lines from stdin.
+
+The program reads log file lines with a `bufio.Scanner` struct
+from the `bufio` Go standard package.
+
+Matching the log file lines (step 3) gets done with a
+moderately complicated `regexp` from the Go standard packages.
+ 
+I kept the logical fields of the "combined" format log file
+in a slice of Go's type `string`,
+so that the program field could use numerical indexes to find
+fields for either matching, or output.
+
+I wrote a recursive descent parser for the logical expressions,
+and a single function recursive evalution,
+which gets run for each input line if the `-e` command line option
+appears.
+The evaluation is done on the abstract syntax (parser output) tree,
+it's a "big step" evaluation, not compiled to some kind of byte code.
+The parsing routines return a `*tree.Node`,
+representing the abstract syntax tree, and an error.
+Because users specify regular expressions to match fields
+of log lines, and entire expressions,
+there are more errors from parsing than from evaluation.
+That's different from similar evalution of arithmetic expressions.
+Once the logical expressions parse correctly,
+evaluation doesn't have any errors.
+Arithmetical expressions can have evaluation errors
+like divide-by-zero, after the expression parses correctly.
+
