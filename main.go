@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"sort"
@@ -23,16 +22,32 @@ func main() {
 		return
 	}
 
-	fin, closefn, ferr, closeferr, err := openSomeFile(badLinesFileName)
+	fopen, err := newFileOpener(badLinesFileName)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintf(os.Stderr, "input file problem: %v\n", err)
+		return
 	}
-	defer closefn()
-	defer closeferr()
 
-	if err := scanAllines(fin, ferr, matching, matchingProgram, outputFields, wholeLineOut, rfc3339Timestamps); err != nil {
+	var cont bool
+
+	for cont, err = fopen.NextFile(); cont && err == nil; cont, err = fopen.NextFile() {
+		if err := scanAllines(
+			fopen.currentFile, fopen.badLinesFile,
+			matching, matchingProgram,
+			outputFields, wholeLineOut, rfc3339Timestamps); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+	}
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 	}
+
+	err = fopen.Done()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "closing files: %v\n", err)
+	}
+
 }
 
 // scanAllines calls a function (argument fn) on all lines
@@ -76,34 +91,64 @@ func scanAllines(linesIn *os.File, linesError *os.File, matching *matchSpec, mat
 	return nil
 }
 
-// openSomeFile either open a file named by flag.Arg(0),
-// and return an *os.File, or if that command line argument doesn't
-// exist, return os.Stdin. Also return a closing function, which should
-// always get called, even if openSomeFile returns os.Stdin
-func openSomeFile(badLineFileName string) (*os.File, func(), *os.File, func(), error) {
+//	fopen, closefn, closeferr, err :=
 
-	var ferr *os.File
-	var closeferr = func() {}
-	var err error
-	var fn = func() {}
+type fopenr struct {
+	currentFile  *os.File
+	badLinesFile *os.File
+	nargsIndex   int
+}
 
-	if badLineFileName != "" {
-		ferr, err = os.OpenFile(badLineFileName, os.O_CREATE|os.O_WRONLY, 0666)
-		if err != nil {
-			return nil, fn, nil, closeferr, err
-		}
-		closeferr = func() { _ = ferr.Close() }
+func (fop *fopenr) Done() error {
+	e1 := fop.currentFile.Close()
+	if fop.badLinesFile != nil {
+		e2 := fop.badLinesFile.Close()
+		e1 = errors.Join(e1, e2)
 	}
+	return e1
+}
 
-	fin := os.Stdin
-	if flag.NArg() > 0 {
+// NextFile opens another file from list of file names on
+// command line after any arguments, if there is one.
+// Vacuous case: opens stdin, but only once.
+// Returns a bool (true means there's freshly opened file),
+// or false and an error. An iterator of sorts.
+func (fop *fopenr) NextFile() (bool, error) {
+	if flag.NArg() > fop.nargsIndex {
+		fop.currentFile.Close()
+		var fin *os.File
 		var err error
-		if fin, err = os.Open(flag.Arg(0)); err != nil {
-			return nil, fn, nil, closeferr, err
+		if fin, err = os.Open(flag.Arg(fop.nargsIndex)); err != nil {
+			return false, err
 		}
-		fn = func() { _ = fin.Close() }
+		fop.currentFile = fin
+		fop.nargsIndex++
+		return true, nil
+	} else if fop.currentFile == nil {
+		fop.currentFile = os.Stdin
+		return true, nil
 	}
-	return fin, fn, ferr, closeferr, nil
+	return false, nil
+}
+
+func newFileOpener(badLinesFileName string) (*fopenr, error) {
+	var ferr *os.File
+	var err error
+
+	if badLinesFileName != "" {
+		ferr, err = os.OpenFile(badLinesFileName, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	fop := &fopenr{
+		currentFile:  nil,
+		badLinesFile: ferr,
+		nargsIndex:   0,
+	}
+
+	return fop, nil
 }
 
 var logLineTS = regexp.MustCompile(`^([^ ]+) - ([^ ]*) (\[[^]]+\]).*`)
