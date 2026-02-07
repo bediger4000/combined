@@ -40,7 +40,7 @@ Faster way: exact match or regular expression match of one field:
 
 ```
 $ combined -f ipaddr,timestamp -r -m 'url=/exact string to match/' /var/log/httpd/access_log
-$ combined -f url,referrer -m 'url~/..*\.php/' /var/log/httpd/access_log
+$ combined -f url,referrer -m 'url~/..*\.php/' /var/log/httpd/access_log /var/log/httpd/access_log.1
 ```
 
 Slower, but more expressive, way.
